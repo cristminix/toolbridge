@@ -1,0 +1,46 @@
+{
+  "name": "openai-proxy",
+  "version": "1.0.0",
+  "description": "A proxy for OpenAI/Ollama API to enabling tool calls",
+  "license": "MIT",
+  "author": "oct4pie",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "mocha \"src/test/{unit,parser,streaming}/**/*.test.js\"",
+    "test:all": "node src/test/runners/run-all-tests.js",
+    "test:sequential": "node src/test/utils/run-all-tests-sequential.js",
+    "test:xml": "mocha \"src/test/parser/xml/*.test.js\"",
+    "test:llm": "mocha \"src/test/parser/llm-patterns/*.test.js\"",
+    "test:integration": "mocha \"src/test/integration/*.test.js\"",
+    "test:edge": "mocha \"src/test/parser/edge-cases/*.test.js\"",
+    "test:html": "mocha \"src/test/parser/html/*.test.js\"",
+    "test:streaming": "mocha \"src/test/streaming/*.test.js\"",
+    "test:unit": "mocha \"src/test/unit/**/*.test.js\"",
+    "test:runners": "mocha \"src/test/runners/*.test.js\"",
+    "test:coverage": "c8 mocha \"src/test/{unit,parser,streaming}/**/*.test.js\"",
+    "test:coverage:all": "c8 mocha \"src/test/**/*.test.js\"",
+    "test:single": "mocha",
+    "test:tools": "node src/test/runners/run-tool-call-tests.js",
+    "test:all-without-integration": "mocha \"src/test/{unit,parser,streaming}/**/*.test.js\"",
+    "start": "node --no-deprecation index.js"
+  },
+  "dependencies": {
+    "axios": "^1.8.4",
+    "chalk": "^5.3.0",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "fast-xml-parser": "^5.2.0",
+    "http-proxy-middleware": "^3.0.5",
+    "openai": "^4.95.0",
+    "string-width": "^7.2.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.25.1",
+    "c8": "^9.1.0",
+    "chai": "^5.2.0",
+    "eslint": "^9.25.1",
+    "globals": "^16.0.0",
+    "mocha": "^11.1.0"
+  }
+}
