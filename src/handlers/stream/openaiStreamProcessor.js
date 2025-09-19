@@ -5,7 +5,6 @@ import {
   formatSSEChunk,
 } from "../../utils/sseUtils.js";
 import { extractToolCallXMLParser } from "../../utils/xmlUtils.js";
-import { detectPotentialToolCall } from "../toolCallHandler.js";
 
 class JsonStreamParser {
   constructor(onParse) {
@@ -28,7 +27,7 @@ class JsonStreamParser {
         this.onParse(json);
         this.buffer = "";
         return;
-      } catch (e) {}
+      } catch (_e) { }
     }
 
     if (this.buffer.startsWith("t.completion.chunk")) {
@@ -51,7 +50,7 @@ class JsonStreamParser {
       const json = JSON.parse(this.buffer);
       this.onParse(json);
       this.buffer = "";
-    } catch (e) {
+    } catch (_e) {
       logger.debug("[STREAM PARSER] Incomplete JSON, waiting for more data");
     }
   }
@@ -61,7 +60,7 @@ class JsonStreamParser {
       try {
         const json = JSON.parse(this.buffer);
         this.onParse(json);
-      } catch (e) {
+      } catch (_e) {
         logger.warn(
           "[STREAM PARSER] Discarding incomplete JSON at end of stream:",
           this.buffer.length > 50
@@ -153,9 +152,14 @@ export class OpenAIStreamProcessor {
       const finishReason = parsedChunk.choices?.[0]?.finish_reason;
 
       if (contentDelta) {
-        const updatedBuffer = this.toolCallBuffer + contentDelta;
-        const xmlStartInDelta = contentDelta.indexOf("<");
-        const hasPotentialStartTag = xmlStartInDelta !== -1;
+        // Simple check for code block context - this is a simplified version
+        // A more robust implementation would track code block state more carefully
+        let xmlStartInDelta = -1;
+        let hasPotentialStartTag = false;
+
+        // Check for XML tags even inside code blocks
+        xmlStartInDelta = contentDelta.indexOf("<");
+        hasPotentialStartTag = xmlStartInDelta !== -1;
 
         if (!this.isPotentialToolCall && hasPotentialStartTag) {
           const textBeforeXml = contentDelta.substring(0, xmlStartInDelta);
@@ -166,130 +170,159 @@ export class OpenAIStreamProcessor {
               "[STREAM PROCESSOR] Found text before potential XML:",
               textBeforeXml
             );
-            this.accumulatedContentBeforeToolCall += textBeforeXml;
-            logger.debug(
-              "[STREAM PROCESSOR] Buffering text before XML, will send if needed"
+
+            // Check if the text resembles code explanations
+            const codeExplanationPatterns = [
+              "Here's how",
+              "Let me show",
+              "Example code",
+              "Code implementation",
+              "JavaScript code",
+              "Here is"
+            ];
+
+            const isLikelyCodeExplanation = codeExplanationPatterns.some(p =>
+              textBeforeXml.includes(p)
             );
+
+            if (isLikelyCodeExplanation) {
+              logger.debug(
+                "[STREAM PROCESSOR] Detected likely code explanation before XML"
+              );
+              this.accumulatedContentBeforeToolCall += textBeforeXml;
+              this.toolCallBuffer = xmlPortion;
+              this.isPotentialToolCall = true;
+              return;
+            }
           }
 
-          this.toolCallBuffer = xmlPortion;
-
-          const isLikelyPartialTag =
-            !xmlPortion.includes(">") ||
-            (xmlPortion.includes("<") && xmlPortion.includes("_"));
-
-          if (isLikelyPartialTag) {
+          // Check if XML portion contains known tool names
+          // Untuk chunk yang terpecah, kita akan selalu mulai buffering jika mengandung "<"
+          // karena ini bisa menjadi awal dari XML tool call
+          if (xmlPortion.includes("<")) {
             logger.debug(
-              "[STREAM PROCESSOR] Detected likely partial XML tag - buffering without validation"
+              `[STREAM PROCESSOR] Started buffering potential tool fragment`
             );
             this.isPotentialToolCall = true;
-            return;
-          }
-
-          const potential = detectPotentialToolCall(
-            xmlPortion,
-            this.knownToolNames
-          );
-
-          if (
-            (potential.isPotential && potential.mightBeToolCall) ||
-            (potential.rootTagName &&
-              this.knownToolNames.some(
-                (t) =>
-                  t.includes(potential.rootTagName) ||
-                  potential.rootTagName.includes("_")
-              ))
-          ) {
-            this.isPotentialToolCall = true;
-            logger.debug(
-              `[STREAM PROCESSOR] Started buffering potential tool (${potential.rootTagName}) - Buffer size: ${this.toolCallBuffer.length} chars`
-            );
+            this.toolCallBuffer = xmlPortion;
             return;
           } else {
             logger.debug(
               "[STREAM PROCESSOR] XML content does not match known tools, treating as regular content"
             );
-            this.accumulatedContentBeforeToolCall += xmlPortion;
+            this.accumulatedContentBeforeToolCall += contentDelta;
             this.sendSseChunk(parsedChunk);
             return;
           }
         }
 
         if (this.isPotentialToolCall) {
-          this.toolCallBuffer += contentDelta;
-          const potential = detectPotentialToolCall(
-            this.toolCallBuffer,
-            this.knownToolNames
+          // Add contentDelta to toolCallBuffer
+          // If there's text before XML in contentDelta, it should be added to accumulatedContentBeforeToolCall
+          logger.debug(
+            "[STREAM PROCESSOR] Adding contentDelta to toolCallBuffer:",
+            contentDelta
           );
+          this.toolCallBuffer += contentDelta;
 
+          // Tambahkan logika yang lebih robust untuk mendeteksi XML yang lengkap
           logger.debug(
             `[STREAM PROCESSOR] Buffering potential tool - Buffer size: ${this.toolCallBuffer.length} chars`
           );
+          logger.debug(
+            `[STREAM PROCESSOR] Buffer content: "${this.toolCallBuffer}"`
+          );
 
-          if (potential.isCompletedXml) {
+          // Cek apakah buffer mengandung XML yang lengkap dengan pola yang lebih fleksibel
+          const xmlPattern = /<([a-zA-Z0-9_]+)(?:\s*[^>]*)?>([\s\S]*?)<\/\1>/;
+          const xmlMatch = this.toolCallBuffer.match(xmlPattern);
+
+          if (xmlMatch) {
+            const fullXmlContent = xmlMatch[0];
+            const tagName = xmlMatch[1];
+            const contentBetweenTags = xmlMatch[2];
+
             logger.debug(
-              "[STREAM PROCESSOR] Completed potential tool XML detected. Extracting..."
+              `[STREAM PROCESSOR] Found complete XML tag: ${tagName}`
+            );
+            logger.debug(
+              `[STREAM PROCESSOR] Content between tags: "${contentBetweenTags}"`
             );
 
-            const xmlStartIndex = this.toolCallBuffer.indexOf("<");
-            let xmlContent = this.toolCallBuffer;
-            let textBeforeXml = "";
-
-            if (xmlStartIndex > 0) {
-              textBeforeXml = this.toolCallBuffer.substring(0, xmlStartIndex);
-              xmlContent = this.toolCallBuffer.substring(xmlStartIndex);
+            // Cek apakah tagName adalah tool yang dikenal
+            if (this.knownToolNames.includes(tagName)) {
               logger.debug(
-                "[STREAM PROCESSOR] Found text before XML in buffer:",
-                textBeforeXml
+                "[STREAM PROCESSOR] Completed potential tool XML detected. Extracting..."
               );
 
-              if (textBeforeXml) {
-                this.accumulatedContentBeforeToolCall += textBeforeXml;
+              const xmlStartIndex = this.toolCallBuffer.indexOf(fullXmlContent);
+              let xmlContent = fullXmlContent;
+              let textBeforeXml = "";
+
+              if (xmlStartIndex > 0) {
+                textBeforeXml = this.toolCallBuffer.substring(0, xmlStartIndex);
                 logger.debug(
-                  "[STREAM PROCESSOR] Added text before XML to accumulated buffer"
+                  "[STREAM PROCESSOR] Found text before XML in buffer:",
+                  textBeforeXml
                 );
+
+                if (textBeforeXml) {
+                  this.accumulatedContentBeforeToolCall += textBeforeXml;
+                  logger.debug(
+                    "[STREAM PROCESSOR] Added text before XML to accumulated buffer"
+                  );
+                }
               }
-            }
 
-            try {
-              const toolCall = extractToolCallXMLParser(
-                xmlContent,
-                this.knownToolNames
-              );
-
-              if (toolCall && toolCall.name) {
-                logger.debug(
-                  `[STREAM PROCESSOR] Successfully parsed tool call: ${toolCall.name}`
-                );
-                const handled = this.handleDetectedToolCall({
-                  id: parsedChunk?.id,
-                  model: parsedChunk?.model || this.model,
+              try {
+                const toolCall = extractToolCallXMLParser(
                   xmlContent,
-                  toolCall,
-                });
-                if (handled) {
-                  return;
+                  this.knownToolNames
+                );
+
+                if (toolCall && toolCall.name) {
+                  logger.debug(
+                    `[STREAM PROCESSOR] Successfully parsed tool call: ${toolCall.name}`
+                  );
+                  const handled = this.handleDetectedToolCall({
+                    id: parsedChunk?.id,
+                    model: parsedChunk?.model || this.model,
+                    xmlContent,
+                    toolCall,
+                  });
+                  if (handled) {
+                    return;
+                  } else {
+                    this.flushBufferAsText(parsedChunk);
+                    return;
+                  }
                 } else {
+                  logger.debug(
+                    "[STREAM PROCESSOR] Failed to parse as tool call, flushing as text"
+                  );
                   this.flushBufferAsText(parsedChunk);
                   return;
                 }
-              } else {
+              } catch (error) {
                 logger.debug(
-                  "[STREAM PROCESSOR] Failed to parse as tool call, flushing as text"
+                  "[STREAM PROCESSOR] Error parsing tool call:",
+                  error
                 );
                 this.flushBufferAsText(parsedChunk);
                 return;
               }
-            } catch (error) {
+            } else {
               logger.debug(
-                "[STREAM PROCESSOR] Error parsing tool call:",
-                error
+                `[STREAM PROCESSOR] XML tag "${tagName}" is not a known tool, treating as regular content`
               );
-              this.flushBufferAsText(parsedChunk);
+              this.accumulatedContentBeforeToolCall += this.toolCallBuffer;
+              this.sendSseChunk(parsedChunk);
+              this.resetToolCallState();
               return;
             }
           }
 
+          // Jika belum lengkap, lanjutkan buffering
           return;
         } else {
           this.accumulatedContentBeforeToolCall += contentDelta;
@@ -509,7 +542,7 @@ export class OpenAIStreamProcessor {
 
       this.res.write(sseString);
 
-      this.accumulatedContentBeforeToolCall += this.toolCallBuffer;
+      // Don't add toolCallBuffer to accumulatedContentBeforeToolCall as it's already been processed
     }
     this.resetToolCallState();
   }

@@ -35,8 +35,8 @@ describe("Text Duplication Test", function () {
       },
     ]);
 
-    processor.processChunk('{"id": "123", "content": "Test content"}');
-    processor.processChunk('{"id": "124", "content": "More content"}');
+    processor.processChunk('data: {"id":"123","choices":[{"delta":{"content":"Test content"},"index":0,"finish_reason":null}]}');
+    processor.processChunk('data: {"id":"124","choices":[{"delta":{"content":"More content"},"index":0,"finish_reason":null}]}');
 
     const chunks = mockRes.getChunks();
     expect(chunks.length).to.be.at.least(1);

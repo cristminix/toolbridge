@@ -32,8 +32,8 @@ describe("Complex XML Nesting Tests", function () {
 
     expect(result).to.exist;
     expect(result.name).to.equal("search");
-    expect(result.parameters).to.exist;
-    expect(result.parameters.query).to.exist;
+    expect(result.arguments).to.exist;
+    expect(result.arguments.query).to.exist;
   });
 
   it("should handle XML with mixed content and CDATA sections", function () {
@@ -58,10 +58,10 @@ describe("Complex XML Nesting Tests", function () {
 
     expect(result).to.exist;
     expect(result.name).to.equal("run_code");
-    expect(result.parameters).to.exist;
-    expect(result.parameters.language).to.equal("javascript");
-    expect(result.parameters.code).to.include("function parseXml");
-    expect(result.parameters.code).to.include(
+    expect(result.arguments).to.exist;
+    expect(result.arguments.language).to.equal("javascript");
+    expect(result.arguments.code).to.include("function parseXml");
+    expect(result.arguments.code).to.include(
       "<root><child>value</child></root>",
     );
   });
@@ -76,8 +76,8 @@ describe("Complex XML Nesting Tests", function () {
 
     expect(result).to.exist;
     expect(result.name).to.equal("search");
-    expect(result.parameters).to.exist;
-    expect(result.parameters.query).to.include(
+    expect(result.arguments).to.exist;
+    expect(result.arguments.query).to.include(
       "<div> & \"quotes\" in HTML 'safely'",
     );
   });
@@ -98,8 +98,8 @@ describe("Complex XML Nesting Tests", function () {
 
     expect(result).to.exist;
     expect(result.name).to.equal("think");
-    expect(result.parameters).to.exist;
-    expect(result.parameters.thoughts).to.equal(
+    expect(result.arguments).to.exist;
+    expect(result.arguments.thoughts).to.equal(
       "First I need to think about the problem",
     );
   });
@@ -114,8 +114,8 @@ describe("Complex XML Nesting Tests", function () {
 
     expect(result).to.exist;
     expect(result.name).to.equal("search");
-    expect(result.parameters).to.exist;
-    expect(result.parameters.query).to.equal("best practices for API design");
+    expect(result.arguments).to.exist;
+    expect(result.arguments.query).to.equal("best practices for API design");
   });
 
   it("should handle escaped XML within parameters", function () {
@@ -139,10 +139,10 @@ describe("Complex XML Nesting Tests", function () {
 
     expect(result).to.exist;
     expect(result.name).to.equal("run_code");
-    expect(result.parameters).to.exist;
-    expect(result.parameters.language).to.equal("html");
-    expect(result.parameters.code).to.include("<!DOCTYPE html>");
-    expect(result.parameters.code).to.include("<html>");
+    expect(result.arguments).to.exist;
+    expect(result.arguments.language).to.equal("html");
+    expect(result.arguments.code).to.include("<!DOCTYPE html>");
+    expect(result.arguments.code).to.include("<html>");
   });
 
   it("should handle namespace-like prefixes in XML", function () {

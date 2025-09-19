@@ -5,8 +5,8 @@ export function detectPotentialToolCall(content, knownToolNames = []) {
     const contentPreview =
       content.length > 200
         ? content.substring(0, 100) +
-          "..." +
-          content.substring(content.length - 100)
+        "..." +
+        content.substring(content.length - 100)
         : content;
     logger.debug(
       `[TOOL DETECTOR] Checking content (${content.length} chars): ${contentPreview}`,
@@ -28,15 +28,34 @@ export function detectPotentialToolCall(content, knownToolNames = []) {
 
   const trimmed = content.trim();
 
+  // If the content is inside a code block, we still want to detect tool calls
+  // but we need to extract the content from the code block first
   let contentToCheck = trimmed;
   let isCodeBlock = false;
 
-  const codeBlockMatch = trimmed.match(/```(?:xml)[\s\n]?([\s\S]*?)[\s\n]?```/);
-
-  if (codeBlockMatch && codeBlockMatch[1] && codeBlockMatch[1].includes("<")) {
-    contentToCheck = codeBlockMatch[1];
+  // Check for XML code block first
+  const xmlCodeBlockMatch = trimmed.match(/```(?:xml|markup|)[\s\n]?([\s\S]*?)[\s\n]?```/i);
+  if (xmlCodeBlockMatch && xmlCodeBlockMatch[1]) {
+    contentToCheck = xmlCodeBlockMatch[1];
     isCodeBlock = true;
+  } else {
+    // Check for any code block
+    const codeBlockMatch = trimmed.match(/```[a-z]*[\s\n]?([\s\S]*?)[\s\n]?```/);
+    if (codeBlockMatch && codeBlockMatch[1]) {
+      contentToCheck = codeBlockMatch[1];
+      isCodeBlock = true;
+    }
   }
+
+  // Handle escaped XML content
+  // If we have escaped XML, unescape it for proper detection
+  contentToCheck = contentToCheck
+    .replace(/</g, "<")
+    .replace(/>/g, ">")
+    .replace(/"/g, '"')
+    .replace(/'/g, "'")
+    .replace(/&/g, "&");
+
 
   const hasOpeningAngle = contentToCheck.includes("<");
   if (!hasOpeningAngle) {
@@ -159,10 +178,10 @@ export function detectPotentialToolCall(content, knownToolNames = []) {
 
   let hasMatchingClosingTag = false;
   if (exactMatchKnownTool) {
-    hasMatchingClosingTag = trimmed.includes(`</${rootTagName}>`);
+    hasMatchingClosingTag = contentToCheck.includes(`</${rootTagName}>`);
   } else {
     hasMatchingClosingTag = knownToolNames.some((tool) =>
-      trimmed.includes(`</${tool}>`),
+      contentToCheck.includes(`</${tool}>`),
     );
   }
 
@@ -175,13 +194,11 @@ export function detectPotentialToolCall(content, knownToolNames = []) {
 
   if (isPotential) {
     logger.debug(
-      `[TOOL DETECTOR] Content sample: "${trimmed.substring(0, 50)}..." (${
-        trimmed.length
+      `[TOOL DETECTOR] Content sample: "${contentToCheck.substring(0, 50)}..." (${contentToCheck.length
       } chars)`,
     );
     logger.debug(
-      `[TOOL DETECTOR] Root tag: "${
-        rootTagName || "unknown"
+      `[TOOL DETECTOR] Root tag: "${rootTagName || "unknown"
       }", Matches known tool: ${matchesKnownTool}, In code block: ${isCodeBlock}`,
     );
     if (rootTagName) {

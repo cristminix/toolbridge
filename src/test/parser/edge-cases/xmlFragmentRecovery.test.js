@@ -50,7 +50,7 @@ describe("XML Fragment Recovery Tests", function () {
       );
       expect(result).to.exist;
       expect(result.name).to.equal("run_code");
-      expect(result.parameters.code).to.include(
+      expect(result.arguments.code).to.include(
         "<p>This paragraph is not closed",
       );
     } catch (_err) {
@@ -125,7 +125,7 @@ describe("XML Fragment Recovery Tests", function () {
     const result = extractToolCallXMLParser(xmlWithDeclaration, knownToolNames);
     expect(result).to.exist;
     expect(result.name).to.equal("search");
-    expect(result.parameters.query).to.equal("XML with declaration");
+    expect(result.arguments.query).to.equal("XML with declaration");
   });
 
   it("should handle XML mixed with JSON", function () {
@@ -137,7 +137,7 @@ describe("XML Fragment Recovery Tests", function () {
     const result = extractToolCallXMLParser(xmlInJson, knownToolNames);
     expect(result).to.exist;
     expect(result.name).to.equal("search");
-    expect(result.parameters.query).to.equal("find information");
+    expect(result.arguments.query).to.equal("find information");
   });
 
   it("should identify tool calls with non-standard whitespace", function () {
@@ -150,8 +150,8 @@ describe("XML Fragment Recovery Tests", function () {
     );
     expect(result).to.exist;
     expect(result.name).to.equal("search");
-    expect(result.parameters.query.trim()).to.include("query with");
-    expect(result.parameters.query.trim()).to.include("strange");
-    expect(result.parameters.query.trim()).to.include("whitespace");
+    expect(result.arguments.query.trim()).to.include("query with");
+    expect(result.arguments.query.trim()).to.include("strange");
+    expect(result.arguments.query.trim()).to.include("whitespace");
   });
 });

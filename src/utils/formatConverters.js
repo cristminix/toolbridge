@@ -49,6 +49,19 @@ export function convertResponse(
   }
 
   if (sourceFormat === FORMAT_OPENAI && targetFormat === FORMAT_OPENAI) {
+    // Tambahkan konversi tool call bahkan ketika formatnya sama
+    if (response.choices && response.choices.length > 0) {
+      const choice = response.choices[0];
+      if (choice.message && choice.message.content) {
+        const content = choice.message.content;
+        // Cek jika content berisi XML tool call yang perlu dikonversi
+        if (content.includes("<") && content.includes(">")) {
+          logger.debug("[CONVERT] Found XML content in OpenAI response, checking for tool call...");
+          // Kita bisa menambahkan logika konversi di sini jika diperlukan
+          // Untuk saat ini, kita tetap mengembalikan response asli
+        }
+      }
+    }
     return { ...response };
   }
   if (sourceFormat === FORMAT_OPENAI && targetFormat === FORMAT_OLLAMA) {

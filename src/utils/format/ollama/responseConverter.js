@@ -155,6 +155,46 @@ export function convertOpenAIResponseToOllama(
       }
     }
 
+    // Tambahkan konversi ke format OpenAI tool_call jika diperlukan
+    if (ollamaResponse.tool_calls) {
+      // Jika sudah memiliki tool_calls, kita tinggal mengembalikan response
+      return ollamaResponse;
+    } else if (message.content && message.content.includes("<") && message.content.includes(">")) {
+      // Jika belum memiliki tool_calls tapi memiliki XML, coba konversi
+      const toolCall = extractToolCallXMLParser(message.content, knownToolNames);
+      if (toolCall) {
+        logger.debug(
+          "[CONVERT] Converted XML tool call to OpenAI format:",
+          toolCall,
+        );
+        // Konversi ke format OpenAI tool_call
+        const openAIResponse = {
+          ...openAIResponse,
+          choices: [
+            {
+              ...choice,
+              message: {
+                ...message,
+                content: null,
+                tool_calls: [
+                  {
+                    id: `call_${Date.now()}`,
+                    type: "function",
+                    function: {
+                      name: toolCall.name,
+                      arguments: JSON.stringify(toolCall.arguments || {}),
+                    },
+                  },
+                ],
+              },
+              finish_reason: "tool_calls",
+            },
+          ],
+        };
+        return openAIResponse;
+      }
+    }
+
     return ollamaResponse;
   }
 

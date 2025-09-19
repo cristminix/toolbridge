@@ -22,9 +22,21 @@ export function buildBackendPayload({
   max_tokens,
   ...rest
 }) {
+  // Konversi pesan dengan role "tool" menjadi pesan dengan role "user"
+  const convertedMessages = messages.map((message) => {
+    if (message.role === "tool") {
+      // Konversi pesan tool menjadi pesan user dengan format yang sesuai
+      return {
+        role: "user",
+        content: `Tool response for call ID ${message.tool_call_id}: ${message.content}`
+      };
+    }
+    return message;
+  });
+
   const payload = {
     model,
-    messages: [...messages],
+    messages: convertedMessages,
     ...(temperature !== undefined && { temperature }),
     ...(top_p !== undefined && { top_p }),
     ...(max_tokens !== undefined && { max_tokens }),
@@ -39,6 +51,19 @@ export function buildBackendPayload({
 }
 
 function injectToolInstructions(payload, tools) {
+  // Cek apakah pesan sudah mengandung tool_calls
+  const hasToolCalls = payload.messages.some(
+    (m) => m.role === "assistant" && m.tool_calls
+  );
+
+  // Jika sudah ada tool_calls, jangan tambahkan instruksi tool
+  if (hasToolCalls) {
+    logger.debug(
+      "Payload already contains tool calls, skipping tool instruction injection.",
+    );
+    return;
+  }
+
   const toolInstructions = formatToolsForBackendPromptXML(tools);
 
   const exclusiveToolsNotice = `\nIMPORTANT: The tools listed above are the ONLY tools available to you. Do not attempt to use any other tools.`;

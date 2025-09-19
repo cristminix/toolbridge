@@ -85,6 +85,7 @@ const chatCompletionsHandler = async (req, res) => {
         backendResponseOrStream,
         clientRequestFormat,
         backendTargetFormat,
+        req.body.tools,
       );
 
       logger.debug(
